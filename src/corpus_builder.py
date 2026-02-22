@@ -1,4 +1,4 @@
-"""Coleta de corpus de artigos via Semantic Scholar, arXiv e ERIC."""
+"""Coleta de corpus de artigos via Semantic Scholar, arXiv, OpenAlex e ERIC."""
 
 import difflib
 import logging
@@ -237,6 +237,81 @@ def query_eric(config: dict) -> list[dict]:
     return articles
 
 
+def query_openalex(config: dict) -> list[dict]:
+    """Busca artigos via OpenAlex API (gratuita, sem autenticação)."""
+    logger.info("Buscando no OpenAlex...")
+    articles = []
+    query = config["corpus"]["query"]
+    year_start, year_end = config["corpus"]["year_range"]
+
+    cursor = "*"
+    collected = 0
+    max_collect = 150
+
+    while cursor and collected < max_collect:
+        params = {
+            "search": query,
+            "filter": f"publication_year:{year_start}-{year_end},type:article",
+            "select": "id,title,doi,publication_year,authorships,abstract_inverted_index",
+            "per_page": 100,
+            "cursor": cursor,
+        }
+
+        mailto = __import__("os").getenv("OPENALEX_EMAIL", "")
+        if mailto:
+            params["mailto"] = mailto
+
+        resp = _safe_get("https://api.openalex.org/works", params=params)
+        if resp is None:
+            break
+
+        data = resp.json()
+        results = data.get("results", [])
+        if not results:
+            break
+
+        for work in results:
+            title = (work.get("title") or "").strip()
+
+            # Reconstruir abstract a partir do inverted index
+            abstract = ""
+            inv_index = work.get("abstract_inverted_index")
+            if inv_index:
+                words = {}
+                for word, positions in inv_index.items():
+                    for pos in positions:
+                        words[pos] = word
+                abstract = " ".join(words[k] for k in sorted(words))
+
+            authors = ", ".join(
+                (a.get("author", {}).get("display_name") or "")
+                for a in (work.get("authorships") or [])
+            )
+
+            doi_raw = work.get("doi") or ""
+            doi = doi_raw.replace("https://doi.org/", "")
+
+            openalex_id = (work.get("id") or "").split("/")[-1]
+
+            articles.append({
+                "id": f"oalex_{openalex_id}",
+                "title": title,
+                "abstract": abstract,
+                "authors": authors,
+                "year": work.get("publication_year"),
+                "doi": doi,
+                "source": "openalex",
+                "url": work.get("id", ""),
+            })
+
+        collected += len(results)
+        cursor = data.get("meta", {}).get("next_cursor")
+        time.sleep(0.2)
+
+    logger.info(f"OpenAlex: {len(articles)} artigos coletados")
+    return articles
+
+
 def _normalize_title(title: str) -> str:
     return re.sub(r"[^a-z0-9\s]", "", title.lower()).strip()
 
@@ -273,19 +348,25 @@ def _deduplicate(articles: list[dict], threshold: float = 0.9) -> list[dict]:
 
 def build_corpus(config: dict) -> pd.DataFrame:
     """
-    Coleta 80-120 artigos de 3 fontes, deduplica e filtra.
+    Coleta 80-120 artigos de 4 fontes, deduplica e filtra.
     Salva em data/raw/corpus.csv.
     """
     all_articles = []
 
     # Coleta de cada fonte (tolerante a falhas)
-    sources = config["corpus"].get("sources", ["semantic_scholar", "arxiv", "eric"])
+    sources = config["corpus"].get("sources", ["semantic_scholar", "openalex", "arxiv", "eric"])
 
     if "semantic_scholar" in sources:
         try:
             all_articles.extend(query_semantic_scholar(config))
         except Exception as e:
             logger.error(f"Semantic Scholar falhou: {e}")
+
+    if "openalex" in sources:
+        try:
+            all_articles.extend(query_openalex(config))
+        except Exception as e:
+            logger.error(f"OpenAlex falhou: {e}")
 
     if "arxiv" in sources:
         try:
@@ -318,15 +399,29 @@ def build_corpus(config: dict) -> pd.DataFrame:
     filtered = [a for a in unique if a.get("abstract") and len(a["abstract"]) >= 50]
     logger.info(f"Após filtro de abstract: {len(filtered)}")
 
-    # Verificar range alvo
+    # Verificar range alvo e truncar se necessário
     target_min, target_max = config["corpus"].get("target_size", [80, 120])
+    if len(filtered) > target_max:
+        logger.info(f"{len(filtered)} artigos coletados — truncando para {target_max}")
+        # Priorizar diversidade de fontes: pegar proporcionalmente de cada
+        by_source = {}
+        for a in filtered:
+            by_source.setdefault(a["source"], []).append(a)
+        per_source = max(target_max // len(by_source), 1)
+        truncated = []
+        for src, arts in by_source.items():
+            truncated.extend(arts[:per_source])
+        # Completar com o restante se ainda falta
+        if len(truncated) < target_max:
+            used_ids = {a["id"] for a in truncated}
+            for a in filtered:
+                if a["id"] not in used_ids and len(truncated) < target_max:
+                    truncated.append(a)
+        filtered = truncated[:target_max]
+
     if len(filtered) < target_min:
         logger.warning(
             f"ATENÇÃO: {len(filtered)} artigos — abaixo do mínimo ({target_min})"
-        )
-    elif len(filtered) > target_max:
-        logger.warning(
-            f"ATENÇÃO: {len(filtered)} artigos — acima do máximo ({target_max})"
         )
     else:
         logger.info(f"OK: {len(filtered)} artigos dentro do range [{target_min}, {target_max}]")

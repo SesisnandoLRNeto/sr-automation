@@ -1,6 +1,6 @@
 model:
   provider: "groq"
-  model_name: "llama-3.1-70b-versatile"
+  model_name: "llama-3.3-70b-versatile"
   fallback_provider: "together"
   fallback_model: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
 
@@ -38,7 +38,7 @@ corpus:
   language: "en"
   target_size: [80, 120]
   dedup_threshold: 0.9
-  sources: ["semantic_scholar", "arxiv", "eric"]
+  sources: ["semantic_scholar", "openalex", "arxiv", "eric"]
 
 gold_standard:
   min_kappa: 0.7
