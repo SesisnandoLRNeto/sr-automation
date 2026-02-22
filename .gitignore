@@ -30,6 +30,9 @@ outputs/figures/
 # ChromaDB persistence
 data/processed/embeddings/
 
+# LLM response cache
+outputs/.llm_cache/
+
 # Jupyter
 .ipynb_checkpoints/
 

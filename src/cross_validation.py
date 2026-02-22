@@ -54,6 +54,7 @@ def _run_triage(
     prompt_builder,
     run_name: str,
     output_path: str,
+    force_together: bool = False,
 ) -> list[dict]:
     """Executa triagem com um prompt builder específico."""
     results = []
@@ -69,6 +70,8 @@ def _run_triage(
                 stage="triage",
                 audit_logger=audit,
                 article_id=str(row["id"]),
+                use_cache=False,
+                force_together=force_together,
             )
 
             decision, justification, confidence = _parse_decision(response["text"])
@@ -100,8 +103,12 @@ def run_cross_validation(corpus_df: pd.DataFrame, config: dict) -> dict:
     criteria = config["gold_standard"]["criteria"]
     output_dir = config["paths"]["outputs"]
     os.makedirs(output_dir, exist_ok=True)
+    force_together = config["cross_validation"].get("force_together", False)
 
-    logger.info("=== Cross-Validation: 3 runs ===")
+    if force_together:
+        logger.info("=== Cross-Validation: 3 runs (via Together AI) ===")
+    else:
+        logger.info("=== Cross-Validation: 3 runs ===")
 
     # Run 1: Prompt original
     logger.info("Run 1: Prompt original")
@@ -110,6 +117,7 @@ def run_cross_validation(corpus_df: pd.DataFrame, config: dict) -> dict:
         lambda t, a: _build_prompt_run1(criteria, t, a),
         "run1",
         os.path.join(output_dir, "crossval_run1.jsonl"),
+        force_together=force_together,
     )
 
     # Run 2: Sinônimos
@@ -119,6 +127,7 @@ def run_cross_validation(corpus_df: pd.DataFrame, config: dict) -> dict:
         lambda t, a: _build_prompt_run2(t, a),
         "run2",
         os.path.join(output_dir, "crossval_run2.jsonl"),
+        force_together=force_together,
     )
 
     # Run 3: Ordem invertida
@@ -128,6 +137,7 @@ def run_cross_validation(corpus_df: pd.DataFrame, config: dict) -> dict:
         lambda t, a: _build_prompt_run3(criteria, t, a),
         "run3",
         os.path.join(output_dir, "crossval_run3.jsonl"),
+        force_together=force_together,
     )
 
     # Alinhar por article_id

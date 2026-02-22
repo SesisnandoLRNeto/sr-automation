@@ -50,6 +50,7 @@ gold_standard:
 cross_validation:
   num_runs: 3
   expected_kappa: 0.8
+  force_together: true
 
 hallucination_check:
   sample_size_per_module: 30

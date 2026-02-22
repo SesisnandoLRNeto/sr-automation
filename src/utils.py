@@ -1,6 +1,7 @@
 """Utilitários: config, prompts e wrapper de chamadas LLM."""
 
 import hashlib
+import json
 import logging
 import os
 import time
@@ -14,6 +15,9 @@ from dotenv import load_dotenv
 from src.audit_logger import AuditLogger
 
 logger = logging.getLogger(__name__)
+
+# Diretório de cache para respostas LLM
+_CACHE_DIR = Path("outputs/.llm_cache")
 
 
 def setup_logging() -> None:
@@ -94,6 +98,26 @@ _groq_consecutive_failures = 0
 _GROQ_SKIP_THRESHOLD = 3
 
 
+def _get_cache(stage: str, prompt_hash: str) -> Optional[dict]:
+    """Retorna resposta cacheada ou None."""
+    cache_file = _CACHE_DIR / f"{stage}_{prompt_hash}.json"
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return None
+    return None
+
+
+def _set_cache(stage: str, prompt_hash: str, result: dict) -> None:
+    """Salva resposta no cache."""
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = _CACHE_DIR / f"{stage}_{prompt_hash}.json"
+    with open(cache_file, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False)
+
+
 def call_llm(
     prompt: str,
     config: dict,
@@ -101,6 +125,8 @@ def call_llm(
     audit_logger: AuditLogger,
     article_id: str = "",
     decision_label: Optional[str] = None,
+    use_cache: bool = True,
+    force_together: bool = False,
 ) -> dict:
     """Chama LLM via Groq, com fallback para Together AI."""
     global _groq_consecutive_failures
@@ -111,6 +137,26 @@ def call_llm(
     max_tokens = params["max_tokens"]
     prompt_hash = _hash_prompt(prompt)
 
+    # Cache: retorna resposta anterior se existir
+    if use_cache:
+        cached = _get_cache(stage, prompt_hash)
+        if cached is not None:
+            logger.debug(f"Cache hit: {stage}_{prompt_hash}")
+            audit_logger.log(
+                module=stage,
+                article_id=article_id,
+                decision=decision_label or cached["text"][:200],
+                confidence=1.0,
+                prompt_hash=prompt_hash,
+                provider=cached.get("provider", "cache"),
+                tokens_in=cached.get("tokens_input", 0),
+                tokens_out=cached.get("tokens_output", 0),
+                latency_ms=0.0,
+                raw_response=cached["text"],
+            )
+            cached["provider"] = "cache"
+            return cached
+
     groq_key = os.getenv("GROQ_API_KEY", "")
     together_key = os.getenv("TOGETHER_API_KEY", "")
 
@@ -120,11 +166,11 @@ def call_llm(
     provider = "groq"
     result = None
 
-    # Pular Groq se rate limit consecutivo atingiu o threshold
-    skip_groq = _groq_consecutive_failures >= _GROQ_SKIP_THRESHOLD
+    # Pular Groq se forçado ou se rate limit consecutivo atingiu o threshold
+    skip_groq = force_together or _groq_consecutive_failures >= _GROQ_SKIP_THRESHOLD
 
     if skip_groq:
-        logger.debug("Groq em rate limit — usando Together AI direto.")
+        logger.debug("Usando Together AI direto.")
     else:
         try:
             result = _call_provider(
@@ -186,8 +232,11 @@ def call_llm(
 
     result["provider"] = provider
 
+    # Salvar no cache
+    _set_cache(stage, prompt_hash, result)
+
     # Rate limit Groq free tier (~30 req/min)
     if provider == "groq":
-        time.sleep(2.1)
+        time.sleep(1.5)
 
     return result
