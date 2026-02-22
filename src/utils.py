@@ -89,6 +89,11 @@ class RateLimitError(Exception):
     pass
 
 
+# Contador de rate limits consecutivos do Groq
+_groq_consecutive_failures = 0
+_GROQ_SKIP_THRESHOLD = 3
+
+
 def call_llm(
     prompt: str,
     config: dict,
@@ -98,6 +103,8 @@ def call_llm(
     decision_label: Optional[str] = None,
 ) -> dict:
     """Chama LLM via Groq, com fallback para Together AI."""
+    global _groq_consecutive_failures
+
     params = config["inference"][stage]
     temperature = params["temperature"]
     top_p = params["top_p"]
@@ -113,17 +120,12 @@ def call_llm(
     provider = "groq"
     result = None
 
-    # Groq
-    try:
-        result = _call_provider(
-            prompt, groq_url, groq_key,
-            config["model"]["model_name"],
-            temperature, top_p, max_tokens,
-        )
-        provider = "groq"
-    except RateLimitError:
-        logger.warning("Groq rate limit. Aguardando 60s antes de retry...")
-        time.sleep(60)
+    # Pular Groq se rate limit consecutivo atingiu o threshold
+    skip_groq = _groq_consecutive_failures >= _GROQ_SKIP_THRESHOLD
+
+    if skip_groq:
+        logger.debug("Groq em rate limit — usando Together AI direto.")
+    else:
         try:
             result = _call_provider(
                 prompt, groq_url, groq_key,
@@ -131,14 +133,35 @@ def call_llm(
                 temperature, top_p, max_tokens,
             )
             provider = "groq"
-        except Exception:
-            logger.warning("Groq retry falhou. Fallback para Together AI.")
+            _groq_consecutive_failures = 0
+        except RateLimitError:
+            _groq_consecutive_failures += 1
+            if _groq_consecutive_failures < _GROQ_SKIP_THRESHOLD:
+                logger.warning("Groq rate limit. Aguardando 60s antes de retry...")
+                time.sleep(60)
+                try:
+                    result = _call_provider(
+                        prompt, groq_url, groq_key,
+                        config["model"]["model_name"],
+                        temperature, top_p, max_tokens,
+                    )
+                    provider = "groq"
+                    _groq_consecutive_failures = 0
+                except Exception:
+                    logger.warning("Groq retry falhou. Fallback para Together AI.")
+                    _groq_consecutive_failures += 1
+                    result = None
+            else:
+                logger.warning(
+                    f"Groq rate limit ({_groq_consecutive_failures}x consecutivo). "
+                    "Usando Together AI para as próximas chamadas."
+                )
+                result = None
+        except (requests.exceptions.Timeout, requests.exceptions.HTTPError) as e:
+            logger.warning(f"Groq erro ({e}). Fallback para Together AI.")
             result = None
-    except (requests.exceptions.Timeout, requests.exceptions.HTTPError) as e:
-        logger.warning(f"Groq erro ({e}). Fallback para Together AI.")
-        result = None
 
-    # Tentativa 2: Together AI (fallback)
+    # Fallback: Together AI
     if result is None:
         result = _call_provider(
             prompt, together_url, together_key,
