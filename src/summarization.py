@@ -1,7 +1,4 @@
-"""
-Sumarização estruturada (TL;DR) em 3 frases.
-Ref: §3.1.2 — problema, solução, achados.
-"""
+"""Sumarização estruturada (TL;DR) em 3 frases: problema, solução, achados."""
 
 import json
 import logging

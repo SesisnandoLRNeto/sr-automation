@@ -1,7 +1,4 @@
-"""
-Geração de tabelas LaTeX e figuras para o Capítulo 4 da dissertação.
-Ref: §3.5.6 Fase 4, Plano de Execução Dia 9.
-"""
+"""Geração de tabelas LaTeX e figuras para a dissertação."""
 
 import json
 import logging

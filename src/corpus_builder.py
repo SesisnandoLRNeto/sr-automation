@@ -1,9 +1,4 @@
-"""
-Coleta de corpus de 3 fontes: Semantic Scholar, arXiv, ERIC.
-Ref: §3.5.6 Fase 1 — busca, deduplicação, filtro.
-
-Meta: 80-120 artigos após dedup e filtro.
-"""
+"""Coleta de corpus de artigos via Semantic Scholar, arXiv e ERIC."""
 
 import difflib
 import logging

@@ -1,10 +1,4 @@
-"""
-Indexação semântica em ChromaDB + busca + re-ranking.
-Ref: §3.4.2 (embeddings, re-ranking), §3.5.6 Fase 3 item 2.
-
-Nota: Dissertação §3.4.2 especifica FAISS com IVF-PQ. Protótipo usa
-ChromaDB por simplicidade — corpus pequeno (80-120 artigos) não justifica FAISS.
-"""
+"""Indexação semântica em ChromaDB com re-ranking via Cross-Encoder."""
 
 import logging
 

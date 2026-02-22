@@ -1,13 +1,4 @@
-"""
-Cálculo de métricas de avaliação do pipeline.
-Ref: §3.4.3 (Eq. 3.1-3.6), §3.6.1-3.6.2.
-
-Métricas:
-  - Recall (Eq 3.1), Precision (Eq 3.2), Specificity (Eq 3.3), F1 (Eq 3.4)
-  - Workload Reduction (Eq 3.6)
-  - Métricas operacionais (tempo, tokens)
-  - Concordância inter-anotador (Cohen's Kappa)
-"""
+"""Métricas de avaliação: recall, precision, F1, workload reduction, kappa."""
 
 import json
 import logging
@@ -75,13 +66,13 @@ def calculate_metrics(
     tp, fn = cm[0][0], cm[0][1]
     fp, tn = cm[1][0], cm[1][1]
 
-    # Métricas de classificação (Eq 3.1-3.4)
+    # Métricas de classificação
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
-    # Workload Reduction (Eq 3.6)
+    # Workload Reduction
     total = len(merged)
     excluded_auto = int((y_pred == 0).sum())
     wr = (excluded_auto / total) * 100 if total > 0 else 0.0

@@ -1,10 +1,4 @@
-"""
-Triagem automática zero-shot de artigos.
-Ref: §3.1.2 (triagem), §3.5.6 Fase 3 itens 3-4.
-
-Nível único: título + abstract combinados (confirmado com usuário).
-Prompts em inglês (YES/NO).
-"""
+"""Triagem automática zero-shot (YES/NO) de artigos por título + abstract."""
 
 import json
 import logging

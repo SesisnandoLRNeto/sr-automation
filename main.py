@@ -1,19 +1,4 @@
-"""
-Orquestrador CLI do pipeline SR-Automation.
-Ref: §3.5.6 Fase 3 — execução do pipeline automatizado.
-
-Uso:
-    python main.py                    # Pipeline completo
-    python main.py --step corpus      # Só coleta de corpus
-    python main.py --step triage      # Só triagem (requer corpus)
-    python main.py --step extract     # Só extração (requer triagem)
-    python main.py --step summarize   # Só sumarização (requer triagem)
-    python main.py --step metrics     # Só métricas (requer triagem + gold standard)
-    python main.py --step crossval    # Só cross-validation
-    python main.py --step hallcheck   # Só amostragem de alucinação
-    python main.py --step validate    # Spot-check de extração
-    python main.py --step report      # Gerar tabelas LaTeX e figuras
-"""
+"""Orquestrador CLI do pipeline de revisão sistemática."""
 
 import argparse
 import logging

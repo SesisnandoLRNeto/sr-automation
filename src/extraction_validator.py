@@ -1,7 +1,4 @@
-"""
-Spot-check de extração: valida dados extraídos vs abstract original.
-Ref: Plano de Execução Dia 10.
-"""
+"""Spot-check de extração: valida dados extraídos contra o abstract original."""
 
 import json
 import logging

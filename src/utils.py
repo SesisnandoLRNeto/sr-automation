@@ -1,13 +1,4 @@
-"""
-Utilitários centrais do pipeline SR-Automation.
-
-Golden Rules implementadas aqui:
-  #1 — Toda chamada API passa por call_llm()
-  #2 — Toda chamada logada via AuditLogger
-  #4 — sleep(2.1) entre chamadas Groq (rate limit free tier 30 req/min)
-  #5 — Fallback Groq → Together AI em 429/5xx/timeout
-  #6 — Caminhos via config.yaml
-"""
+"""Utilitários: config, prompts e wrapper de chamadas LLM."""
 
 import hashlib
 import logging
@@ -106,10 +97,7 @@ def call_llm(
     article_id: str = "",
     decision_label: Optional[str] = None,
 ) -> dict:
-    """
-    Wrapper central para todas as chamadas LLM.
-    Groq (primário) → Together AI (fallback) em caso de erro.
-    """
+    """Chama LLM via Groq, com fallback para Together AI."""
     params = config["inference"][stage]
     temperature = params["temperature"]
     top_p = params["top_p"]
@@ -125,7 +113,7 @@ def call_llm(
     provider = "groq"
     result = None
 
-    # Tentativa 1: Groq
+    # Groq
     try:
         result = _call_provider(
             prompt, groq_url, groq_key,
@@ -159,7 +147,7 @@ def call_llm(
         )
         provider = "together"
 
-    # Log via AuditLogger (Golden Rule #2)
+    # Log
     audit_logger.log(
         module=stage,
         article_id=article_id,
@@ -175,7 +163,7 @@ def call_llm(
 
     result["provider"] = provider
 
-    # Rate limit Groq free tier: 30 req/min → sleep 2.1s (Golden Rule #4)
+    # Rate limit Groq free tier (~30 req/min)
     if provider == "groq":
         time.sleep(2.1)
 

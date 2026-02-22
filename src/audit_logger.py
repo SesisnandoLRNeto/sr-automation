@@ -1,9 +1,4 @@
-"""
-Logging estruturado JSONL para auditabilidade completa.
-Ref: Dissertação §3.3, §3.5.6 Fase 3 item 4, §3.6.4 Eixo 4.
-
-Registra: decisão, score de confiança, tempo de processamento, tokens consumidos.
-"""
+"""Logging estruturado JSONL para rastreabilidade das chamadas LLM."""
 
 import json
 import os
@@ -12,7 +7,7 @@ from typing import Optional
 
 
 class AuditLogger:
-    """Logger JSONL append-only para rastreabilidade de cada chamada LLM."""
+    """Logger JSONL append-only."""
 
     def __init__(self, output_path: str = "outputs/audit_log.jsonl"):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)

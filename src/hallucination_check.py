@@ -1,8 +1,4 @@
-"""
-Verificação de alucinação por amostragem.
-Ref: §3.4.3 (Eq. 3.5) — 30 amostras/módulo, 90 total.
-Margem de erro ~10%, IC 95%.
-"""
+"""Verificação de alucinação por amostragem (30/módulo)."""
 
 import json
 import logging
@@ -117,10 +113,7 @@ def prepare_hallucination_sample(config: dict) -> pd.DataFrame:
 
 
 def calculate_hallucination_rate(sample_path: str) -> dict:
-    """
-    Calcula taxa de alucinação após revisão manual.
-    Ref: §3.4.3, Eq. 3.5: HR = hallucinated / total * 100.
-    """
+    """Calcula taxa de alucinação após revisão manual."""
     df = pd.read_csv(sample_path)
 
     # Filtrar apenas linhas com classificação preenchida

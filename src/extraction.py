@@ -1,7 +1,4 @@
-"""
-Extração estruturada de dados de artigos incluídos.
-Ref: §3.1.2 — 5 campos: objective, methodology, results, conclusions, sample.
-"""
+"""Extração estruturada de dados dos artigos incluídos (5 campos)."""
 
 import json
 import logging

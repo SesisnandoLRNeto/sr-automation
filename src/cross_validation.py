@@ -1,11 +1,4 @@
-"""
-Validação cruzada interna: 3 runs com variações de prompt.
-Ref: §3.4.4 — Cohen's Kappa esperado ≥ 0.8.
-
-Run 1: Prompt original
-Run 2: Critérios reescritos com sinônimos
-Run 3: Ordem invertida (abstract antes do title)
-"""
+"""Validação cruzada interna: 3 runs com variações de prompt."""
 
 import json
 import logging
