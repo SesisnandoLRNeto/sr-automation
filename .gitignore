@@ -1,0 +1,48 @@
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data & Outputs (large/generated files)
+data/raw/*.csv
+data/processed/
+outputs/*.jsonl
+outputs/*.json
+outputs/*.csv
+outputs/*.tex
+outputs/figures/
+
+# ChromaDB persistence
+data/processed/embeddings/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Documentation (generated)
+*.md
+!README.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keep directory structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!outputs/.gitkeep
+!outputs/figures/.gitkeep
