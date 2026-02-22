@@ -1,0 +1,11 @@
+You are an expert in systematic literature reviews. Generate a structured summary (TL;DR) of the article below in exactly 3 sentences:
+
+1. One sentence describing the problem addressed.
+2. One sentence describing the proposed solution.
+3. One sentence describing the main findings.
+
+Article:
+Title: {title}
+Abstract: {abstract}
+
+TL;DR:

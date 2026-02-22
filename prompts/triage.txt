@@ -1,0 +1,11 @@
+You are an expert in systematic literature reviews.
+
+Inclusion criteria:
+{criteria}
+
+Article:
+Title: {title}
+Abstract: {abstract}
+
+Question: Should this article be included in the systematic review?
+Answer ONLY "YES" or "NO" and justify in one sentence.

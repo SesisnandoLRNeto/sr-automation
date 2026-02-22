@@ -1,0 +1,14 @@
+You are an expert in systematic literature reviews. Extract the following fields from the article below. If a field is not mentioned, write "NOT MENTIONED". Respond ONLY with valid JSON.
+
+Article:
+Title: {title}
+Abstract: {abstract}
+
+Extract:
+{{
+  "study_objective": "main objective of the study",
+  "methodology": "methods, approach, or techniques used",
+  "main_results": "key findings or outcomes reported",
+  "conclusions_limitations": "conclusions drawn and limitations noted",
+  "sample_data": "population, dataset, or sample size if mentioned"
+}}
