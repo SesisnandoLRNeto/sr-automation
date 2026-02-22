@@ -41,8 +41,10 @@ data/processed/embeddings/
 .DS_Store
 Thumbs.db
 
-# Keep directory structure
+# Keep directory structure and templates
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !outputs/.gitkeep
 !outputs/figures/.gitkeep
+!data/gold_standard_template.csv
+!outputs/summary_evaluation_template.csv
