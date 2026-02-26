@@ -64,13 +64,32 @@ O pipeline tenta Groq primeiro. Se receber rate limit (429) ou timeout, faz fall
 
 ## Uso
 
-### Pipeline completo
+### Interface Web (recomendado)
+
+O pipeline pode ser operado via interface web, sem necessidade de terminal:
+
+```bash
+source .venv/bin/activate
+python -m uvicorn web.app:app --reload --port 8000
+```
+
+Abrir http://localhost:8000 no browser. A interface possui 5 abas:
+
+| Aba | Funcionalidade |
+|-----|----------------|
+| **Pipeline** | Executar etapas, acompanhar logs em tempo real, resetar outputs |
+| **Corpus** | Visualizar artigos coletados com busca e expansao de abstracts |
+| **Resultados** | Triagem, extracao e resumos em tabelas filtraveis |
+| **Revisao** | Gold standard, alucinacoes e validacao editaveis no browser |
+| **Metricas** | Cards com recall/precision/F1/kappa e figuras inline |
+
+### Pipeline completo (CLI)
 
 ```bash
 python main.py
 ```
 
-### Passos individuais (ordem recomendada)
+### Passos individuais via CLI (ordem recomendada)
 
 ```bash
 # Fase 1: Coleta e processamento
@@ -150,6 +169,13 @@ automation-sistematic-review/
 ├── .env.example                   # Template de API keys
 ├── requirements.txt               # Dependências Python
 ├── main.py                        # Orquestrador CLI (argparse)
+│
+├── web/                           # Interface web (FastAPI)
+│   ├── app.py                     # Backend: endpoints REST + SSE
+│   └── static/
+│       ├── index.html             # Pagina unica com 5 abas
+│       ├── style.css              # CSS minimalista
+│       └── app.js                 # Logica frontend (fetch, SSE, tabelas editaveis)
 │
 ├── prompts/                       # Templates de prompt (editáveis)
 │   ├── triage.txt                 # Prompt de triagem (YES/NO + justificativa)
@@ -341,7 +367,13 @@ pip install -r requirements.txt
 cp .env.example .env
 # Editar .env com suas API keys
 
-# 2. Pipeline automatizado
+# 2. Pipeline automatizado (escolha uma opcao)
+
+# Opcao A — Via interface web:
+python -m uvicorn web.app:app --reload --port 8000
+# Abrir http://localhost:8000 e executar cada etapa pela aba Pipeline
+
+# Opcao B — Via CLI:
 python main.py --step corpus       # ~3 min — coleta 80-120 artigos
 python main.py --step triage       # ~5 min — classifica YES/NO
 python main.py --step extract      # ~3 min — extrai 5 campos JSON
@@ -351,7 +383,7 @@ python main.py --step summarize    # ~4 min — gera TL;DR
 python main.py --step hallcheck    # gera hallucination_sample.csv
 python main.py --step validate     # gera extraction_validation.csv
 
-# 4. [MANUAL] Preencher:
+# 4. [MANUAL] Preencher (via interface web na aba "Revisao" ou diretamente nos CSVs):
 #    - data/gold_standard.csv (2 revisores x 120 artigos)
 #    - outputs/hallucination_sample.csv (coluna classification)
 #    - outputs/extraction_validation.csv (coluna error_type)
