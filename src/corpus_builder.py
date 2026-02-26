@@ -185,7 +185,9 @@ def query_eric(config: dict) -> list[dict]:
     articles = []
     year_start, year_end = config["corpus"]["year_range"]
 
-    search_terms = "intelligent tutoring system AND large language model"
+    raw_query = config["corpus"]["query"]
+    # Simplificar a query para ERIC (não suporta operadores complexos)
+    search_terms = re.sub(r'["\(\)]', '', raw_query).replace(" OR ", " ").replace(" AND ", " AND ")
     start = 0
     rows = 200
 
