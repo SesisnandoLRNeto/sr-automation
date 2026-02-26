@@ -1,16 +1,39 @@
 #!/bin/bash
-# Script para execução do zero — pipeline completo
-# Uso: bash run_fresh.sh
+# =============================================================
+# run_fresh.sh — Limpa TUDO e roda o pipeline do zero
+# =============================================================
+#
+# O que faz:
+#   1. Apaga todos os outputs anteriores (corpus, resultados, cache)
+#   2. Coleta artigos de 4 bases acadêmicas
+#   3. Roda triagem, extração, sumarização
+#   4. Gera amostras para verificação manual
+#
+# Uso:
+#   bash run_fresh.sh
+#   bash run_fresh.sh '"educational chatbot" AND ("LLM" OR "GPT")'
+#
+# Se nenhuma query for passada, usa a query padrão do config.yaml.
+# =============================================================
 
 set -e
 
+QUERY_ARG=""
+QUERY_DISPLAY="(padrão do config.yaml)"
+if [ -n "$1" ]; then
+    QUERY_ARG="--query $1"
+    QUERY_DISPLAY="$1"
+fi
+
+echo ""
 echo "============================================"
 echo "  SR-Automation — Execução do Zero"
+echo "  Query: $QUERY_DISPLAY"
 echo "============================================"
 echo ""
 
-# 1. Limpar outputs anteriores
-echo "[1/8] Limpando outputs anteriores..."
+# --- PASSO 1: Limpar tudo ---
+echo "[1/7] Limpando outputs anteriores..."
 rm -f data/raw/corpus.csv
 rm -f data/gold_standard.csv
 rm -f outputs/triage_results.jsonl
@@ -21,80 +44,54 @@ rm -f outputs/extraction_validation.csv
 rm -f outputs/audit_log.jsonl
 rm -f outputs/metrics.json
 rm -f outputs/cross_validation.json
+rm -f outputs/latex_tables.tex
 rm -rf outputs/.llm_cache/
-echo "   Limpo."
+rm -rf outputs/figures/*.png
+echo "   Tudo limpo."
 echo ""
 
-# 2. Ativar venv
+# --- PASSO 2: Ativar venv ---
 source .venv/bin/activate
 
-# 3. Corpus
-echo "[2/8] Coletando corpus (4 fontes: S2 + OpenAlex + arXiv + ERIC)..."
-echo "   Tempo estimado: ~3 min"
-time python main.py --step corpus
+# --- PASSO 3: Coletar corpus ---
+echo "[2/7] Coletando artigos (Semantic Scholar + OpenAlex + arXiv + ERIC)..."
+echo "      Tempo estimado: ~3 min"
+time python main.py --step corpus $QUERY_ARG
 echo ""
 
-# 4. Triage
-echo "[3/8] Executando triagem automática..."
-echo "   Tempo estimado: ~4 min"
+# --- PASSO 4: Triagem automática ---
+echo "[3/7] Triagem automática (YES/NO para cada artigo)..."
+echo "      Tempo estimado: ~4 min"
 time python main.py --step triage
 echo ""
 
-# 5. Extract
-echo "[4/8] Executando extração de dados..."
-echo "   Tempo estimado: ~2 min"
+# --- PASSO 5: Extração de dados ---
+echo "[4/7] Extração de dados (5 campos por artigo incluído)..."
+echo "      Tempo estimado: ~2 min"
 time python main.py --step extract
 echo ""
 
-# 6. Summarize
-echo "[5/8] Executando sumarização..."
-echo "   Tempo estimado: ~3 min"
+# --- PASSO 6: Sumarização ---
+echo "[5/7] Sumarização (TL;DR 3 frases por artigo)..."
+echo "      Tempo estimado: ~3 min"
 time python main.py --step summarize
 echo ""
 
-# 7. Hallcheck
-echo "[6/8] Gerando amostra para verificação de alucinação..."
+# --- PASSO 7: Amostras para verificação manual ---
+echo "[6/7] Gerando amostra para verificação de alucinação..."
 python main.py --step hallcheck
 echo ""
 
-# 8. Validate
-echo "[7/8] Gerando amostra para validação de extração..."
+echo "[7/7] Gerando amostra para validação de extração..."
 python main.py --step validate
 echo ""
 
-# 9. Gerar gold_standard.csv
-echo "[8/8] Gerando gold_standard.csv com artigos do corpus..."
-python3 -c "
-import csv
-with open('data/raw/corpus.csv', encoding='utf-8') as f:
-    rows = list(csv.DictReader(f))
-with open('data/gold_standard.csv', 'w', newline='', encoding='utf-8') as f:
-    w = csv.writer(f)
-    w.writerow(['id','title','reviewer_a','reviewer_b','consensus','justification'])
-    for r in rows:
-        w.writerow([r['id'], r['title'], '', '', '', ''])
-print(f'   Gold standard gerado: {len(rows)} artigos')
-"
-echo ""
-
+# --- RESUMO ---
 echo "============================================"
-echo "  PIPELINE CONCLUÍDO"
+echo "  CONCLUÍDO"
 echo "============================================"
 echo ""
-echo "Arquivos gerados:"
-echo "  - data/raw/corpus.csv"
-echo "  - outputs/triage_results.jsonl"
-echo "  - outputs/extraction_results.jsonl"
-echo "  - outputs/summaries.jsonl"
-echo "  - outputs/hallucination_sample.csv"
-echo "  - outputs/extraction_validation.csv"
-echo "  - data/gold_standard.csv"
-echo ""
-echo "Próximo passo: preencher gold_standard.csv com o orientador"
-echo "  (colunas reviewer_a, reviewer_b, consensus, justification)"
-echo ""
 
-# Resumo rápido
 python3 -c "
 import csv, json
 
@@ -110,10 +107,17 @@ with open('outputs/triage_results.jsonl') as f:
 yes = sum(1 for t in triage if t['decision'] == 'YES')
 no = sum(1 for t in triage if t['decision'] == 'NO')
 
-print('--- Resumo ---')
 print(f'Corpus: {len(corpus)} artigos')
-for s, c in sources.items():
+for s, c in sorted(sources.items()):
     print(f'  {s}: {c}')
-print(f'Triagem: {yes} YES, {no} NO')
+print(f'Triagem: {yes} incluídos, {no} excluídos')
 print(f'Workload Reduction: {no/len(corpus)*100:.1f}%')
+print()
+print('Próximos passos:')
+print('  1. Preencher data/gold_standard.csv (você + orientador)')
+print('  2. Preencher outputs/hallucination_sample.csv (coluna classification)')
+print('  3. Preencher outputs/extraction_validation.csv (coluna error_type)')
+print('  4. python main.py --step metrics')
+print('  5. python main.py --step crossval')
+print('  6. python main.py --step report')
 "

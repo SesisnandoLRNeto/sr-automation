@@ -93,6 +93,24 @@ def step_validate(config: dict) -> None:
     validate_extractions(extraction_path, corpus_path)
 
 
+def step_gold(config: dict) -> None:
+    """Gera gold_standard.csv vazio a partir do corpus coletado."""
+    import csv
+    corpus_path = config["paths"]["corpus"]
+    gold_path = config["paths"]["gold_standard"]
+    if not os.path.exists(corpus_path):
+        logger.error(f"Corpus não encontrado em {corpus_path}. Execute --step corpus primeiro.")
+        sys.exit(1)
+    corpus_df = pd.read_csv(corpus_path)
+    with open(gold_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "title", "reviewer_a", "reviewer_b", "consensus", "justification"])
+        for _, row in corpus_df.iterrows():
+            writer.writerow([row["id"], row["title"], "", "", "", ""])
+    logger.info(f"Gold standard gerado: {gold_path} ({len(corpus_df)} artigos)")
+    logger.info("Preencha as colunas reviewer_a, reviewer_b, consensus e justification.")
+
+
 def step_report(config: dict) -> None:
     from src.report_generator import (
         generate_confusion_matrix_plot,
@@ -176,7 +194,8 @@ def main():
     parser.add_argument(
         "--step",
         choices=["corpus", "triage", "extract", "summarize",
-                 "metrics", "crossval", "hallcheck", "validate", "report"],
+                 "metrics", "crossval", "hallcheck", "validate", "report",
+                 "gold"],
         help="Executar apenas um passo específico do pipeline",
     )
     parser.add_argument(
@@ -184,10 +203,21 @@ def main():
         default="config.yaml",
         help="Caminho para o arquivo de configuração (default: config.yaml)",
     )
+    parser.add_argument(
+        "--query",
+        type=str,
+        default=None,
+        help='Query de busca para coleta de corpus (ex: \'"AI tutor" AND "LLM"\')',
+    )
 
     args = parser.parse_args()
     config = load_config(args.config)
     setup_logging()
+
+    # Sobrescreve a query do config se passada via CLI
+    if args.query:
+        config["corpus"]["query"] = args.query
+        logger.info(f"Query via CLI: {args.query}")
 
     if args.step is None:
         run_full_pipeline(config)
@@ -213,6 +243,8 @@ def main():
         step_hallcheck(config)
     elif args.step == "validate":
         step_validate(config)
+    elif args.step == "gold":
+        step_gold(config)
     elif args.step == "report":
         step_report(config)
 
