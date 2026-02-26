@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SR-Automation</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>SR-Automation</h1>
+      <p class="subtitle">Pipeline de Revisao Sistematica</p>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="pipeline">Pipeline</button>
+      <button class="tab" data-tab="corpus">Corpus</button>
+      <button class="tab" data-tab="results">Resultados</button>
+      <button class="tab" data-tab="review">Revisao</button>
+      <button class="tab" data-tab="metrics">Metricas</button>
+    </nav>
+
+    <!-- ============================================================ -->
+    <!-- ABA 1: Pipeline                                               -->
+    <!-- ============================================================ -->
+    <section id="tab-pipeline" class="tab-content active">
+      <div class="config-bar">
+        <label
+          >Query:
+          <input type="text" id="cfg-query" placeholder="Query de busca..." />
+        </label>
+        <label
+          >Anos:
+          <input
+            type="number"
+            id="cfg-year-start"
+            min="2000"
+            max="2030"
+            style="width: 70px"
+          />
+          <span>-</span>
+          <input
+            type="number"
+            id="cfg-year-end"
+            min="2000"
+            max="2030"
+            style="width: 70px"
+          />
+        </label>
+        <button id="btn-save-config" class="btn btn-secondary">
+          Salvar Config
+        </button>
+        <button id="btn-export" class="btn btn-secondary">
+          Exportar Resultados
+        </button>
+        <button id="btn-reset" class="btn btn-danger">Resetar Pipeline</button>
+      </div>
+
+      <div class="step-grid" id="step-grid">
+        <!-- Preenchido via JS -->
+      </div>
+
+      <div class="log-viewer">
+        <div class="log-header">
+          <span>Log</span>
+          <button id="btn-clear-log" class="btn btn-secondary btn-sm">
+            Limpar
+          </button>
+        </div>
+        <pre id="log-output"></pre>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ABA 2: Corpus                                                 -->
+    <!-- ============================================================ -->
+    <section id="tab-corpus" class="tab-content">
+      <div class="toolbar">
+        <span id="corpus-count"></span>
+        <input type="text" id="corpus-search" placeholder="Buscar..." />
+      </div>
+      <div class="table-wrap">
+        <table id="corpus-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Titulo</th>
+              <th>Autores</th>
+              <th>Ano</th>
+              <th>Fonte</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ABA 3: Resultados                                             -->
+    <!-- ============================================================ -->
+    <section id="tab-results" class="tab-content">
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-subtab="triage">Triagem</button>
+        <button class="sub-tab" data-subtab="extraction">Extracao</button>
+        <button class="sub-tab" data-subtab="summaries">Resumos</button>
+      </div>
+
+      <div id="subtab-triage" class="subtab-content active">
+        <div class="toolbar">
+          <span id="triage-count"></span>
+          <select id="triage-filter">
+            <option value="">Todos</option>
+            <option value="YES">Incluidos (YES)</option>
+            <option value="NO">Excluidos (NO)</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table id="triage-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Titulo</th>
+                <th>Decisao</th>
+                <th>Justificativa</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="subtab-extraction" class="subtab-content">
+        <div class="table-wrap">
+          <table id="extraction-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Titulo</th>
+                <th>Dados Extraidos</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="subtab-summaries" class="subtab-content">
+        <div class="table-wrap">
+          <table id="summaries-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Titulo</th>
+                <th>Resumo</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ABA 4: Revisao Manual                                         -->
+    <!-- ============================================================ -->
+    <section id="tab-review" class="tab-content">
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-subtab="gold">Gold Standard</button>
+        <button class="sub-tab" data-subtab="hallucination">Alucinacoes</button>
+        <button class="sub-tab" data-subtab="validation">Validacao</button>
+      </div>
+
+      <div id="subtab-gold" class="subtab-content active">
+        <div class="toolbar">
+          <span id="gold-progress"></span>
+          <button id="btn-save-gold" class="btn btn-primary">
+            Salvar Gold Standard
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table id="gold-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Titulo</th>
+                <th>Reviewer A</th>
+                <th>Reviewer B</th>
+                <th>Consenso</th>
+                <th>Justificativa</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="subtab-hallucination" class="subtab-content">
+        <div class="toolbar">
+          <span id="hall-progress"></span>
+          <button id="btn-save-hall" class="btn btn-primary">
+            Salvar Classificacoes
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table id="hall-table">
+            <thead>
+              <tr>
+                <th>Modulo</th>
+                <th>Claim</th>
+                <th>Texto Fonte</th>
+                <th>Classificacao</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="subtab-validation" class="subtab-content">
+        <div class="toolbar">
+          <span id="val-progress"></span>
+          <button id="btn-save-val" class="btn btn-primary">
+            Salvar Validacao
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table id="val-table">
+            <thead>
+              <tr>
+                <th>Artigo</th>
+                <th>Campo</th>
+                <th>Valor Extraido</th>
+                <th>Tipo de Erro</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- ABA 5: Metricas                                               -->
+    <!-- ============================================================ -->
+    <section id="tab-metrics" class="tab-content">
+      <div id="metrics-cards" class="metrics-grid">
+        <!-- Preenchido via JS -->
+      </div>
+      <div id="metrics-figures"></div>
+      <div id="crossval-section">
+        <h3>Cross-Validation</h3>
+        <div id="crossval-content"></div>
+      </div>
+    </section>
+
+    <footer>
+      <p>Mestrado Profissional em Engenharia de Software — C.E.S.A.R</p>
+      <p>Sesisnando Lagos Rodrigues Neto — 2026</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
