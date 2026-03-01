@@ -37,6 +37,7 @@ Principais dependências:
 - `pyyaml` + `python-dotenv` — configuração
 - `tqdm` — progress bars
 - `matplotlib` + `seaborn` — gráficos e figuras
+- `fastapi` + `uvicorn` — interface web
 
 ### 3. Configurar API keys
 
@@ -58,7 +59,7 @@ OPENALEX_EMAIL=seu@email.com   # Opcional — melhora rate limits da OpenAlex
 | Provider | Papel | Modelo | Tier gratuito |
 |---|---|---|---|
 | Groq | Primário | `llama-3.3-70b-versatile` | 1.000 req/dia, 30 req/min |
-| Together AI | Fallback | `Meta-Llama-3.1-70B-Instruct-Turbo` | Pay-as-you-go (~$0.88/M tokens) |
+| Together AI | Fallback | `Llama-3.3-70B-Instruct-Turbo` | Pay-as-you-go (~$0.88/M tokens) |
 
 O pipeline tenta Groq primeiro. Se receber rate limit (429) ou timeout, faz fallback automático para Together AI. Após 3 rate limits consecutivos do Groq, pula diretamente para Together AI.
 
@@ -80,7 +81,7 @@ Abrir http://localhost:8000 no browser. A interface possui 5 abas:
 | **Pipeline** | Executar etapas, acompanhar logs em tempo real, resetar outputs |
 | **Corpus** | Visualizar artigos coletados com busca e expansao de abstracts |
 | **Resultados** | Triagem, extracao e resumos em tabelas filtraveis |
-| **Revisao** | Gold standard, alucinacoes e validacao editaveis no browser |
+| **Revisao** | Gold standard, alucinacoes, validacao e avaliacao Likert editaveis no browser |
 | **Metricas** | Cards com recall/precision/F1/kappa e figuras inline |
 
 ### Pipeline completo (CLI)
@@ -101,6 +102,7 @@ python main.py --step summarize   # Gera TL;DR 3 frases → outputs/summaries.js
 # Fase 2: Amostragem para verificação manual
 python main.py --step hallcheck   # Amostra claims para revisão → outputs/hallucination_sample.csv
 python main.py --step validate    # Amostra campos extraídos → outputs/extraction_validation.csv
+python main.py --step gold        # Gera template gold standard → data/gold_standard.csv
 
 # Fase 3: Avaliação (requer tarefas manuais concluídas)
 python main.py --step metrics     # Calcula métricas vs gold standard → outputs/metrics.json
@@ -111,10 +113,11 @@ python main.py --step report      # Gera tabelas LaTeX + figuras → outputs/lat
 ### Dependências entre passos
 
 ```
-corpus → triage → extract → hallcheck
-                → summarize → hallcheck
-                → metrics (requer gold_standard.csv preenchido)
-         crossval (independente, usa corpus)
+corpus → triage → extract → summarize
+                         → hallcheck
+                         → validate
+       → gold → metrics
+       → crossval
          report (requer metrics + crossval)
 ```
 
@@ -127,7 +130,7 @@ model:
   provider: "groq"
   model_name: "llama-3.3-70b-versatile"       # Modelo principal
   fallback_provider: "together"
-  fallback_model: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+  fallback_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
 
 inference:
   triage:
@@ -209,6 +212,8 @@ automation-sistematic-review/
 │   ├── summaries.jsonl            # Resumos TL;DR
 │   ├── hallucination_sample.csv   # Amostra para verificação de alucinação
 │   ├── extraction_validation.csv  # Amostra para validação de extração
+│   ├── likert_evaluation.csv      # Avaliação Likert dos resumos (20 artigos)
+│   ├── false_negatives_analysis.csv # Análise dos falsos negativos
 │   ├── metrics.json               # Métricas vs gold standard
 │   ├── cross_validation.json      # Resultados da cross-validation
 │   ├── latex_tables.tex           # Tabelas prontas para LaTeX
@@ -313,6 +318,19 @@ Preencher coluna `error_type` para cada campo:
 - `OMISSION` — campo marcado "NOT MENTIONED" mas a informacao esta no abstract
 - `IMPRECISION` — parcialmente correto
 
+### Avaliação Likert dos Resumos (`outputs/likert_evaluation.csv`)
+
+Amostra de 20 resumos gerados pelo pipeline, avaliados em escala Likert (1-5) em 4 dimensoes:
+
+| Dimensão | O que avalia |
+|----------|-------------|
+| Clareza | O resumo é claro e bem redigido? |
+| Completude | Cobre problema, solução e achados? |
+| Acurácia | As informações estão corretas em relação ao abstract original? |
+| Utilidade | O resumo é útil para decidir se o artigo é relevante? |
+
+Na interface web: aba Revisão → sub-tab "Avaliação Likert" → botão "Gerar Amostra" → preencher pontuações → "Salvar".
+
 ## Mecanismos de Resiliencia
 
 ### Fallback automatico de providers
@@ -382,11 +400,13 @@ python main.py --step summarize    # ~4 min — gera TL;DR
 # 3. Amostragem para revisao manual
 python main.py --step hallcheck    # gera hallucination_sample.csv
 python main.py --step validate     # gera extraction_validation.csv
+python main.py --step gold         # gera template gold_standard.csv
 
 # 4. [MANUAL] Preencher (via interface web na aba "Revisao" ou diretamente nos CSVs):
 #    - data/gold_standard.csv (2 revisores x 120 artigos)
 #    - outputs/hallucination_sample.csv (coluna classification)
 #    - outputs/extraction_validation.csv (coluna error_type)
+#    - outputs/likert_evaluation.csv (gerar amostra via web e pontuar 1-5 em 4 dimensoes)
 
 # 5. Avaliacao
 python main.py --step metrics      # requer gold_standard.csv
