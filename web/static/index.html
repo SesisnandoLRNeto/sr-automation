@@ -168,6 +168,7 @@
         <button class="sub-tab active" data-subtab="gold">Gold Standard</button>
         <button class="sub-tab" data-subtab="hallucination">Alucinacoes</button>
         <button class="sub-tab" data-subtab="validation">Validacao</button>
+        <button class="sub-tab" data-subtab="likert">Avaliacao Likert</button>
       </div>
 
       <div id="subtab-gold" class="subtab-content active">
@@ -183,6 +184,8 @@
               <tr>
                 <th>ID</th>
                 <th>Titulo</th>
+                <th>Autores</th>
+                <th>Ano</th>
                 <th>Reviewer A</th>
                 <th>Reviewer B</th>
                 <th>Consenso</th>
@@ -231,6 +234,35 @@
                 <th>Campo</th>
                 <th>Valor Extraido</th>
                 <th>Tipo de Erro</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="subtab-likert" class="subtab-content">
+        <div class="toolbar">
+          <button id="btn-generate-likert" class="btn btn-secondary">
+            Gerar Amostra (20 resumos)
+          </button>
+          <span id="likert-progress"></span>
+          <button id="btn-save-likert" class="btn btn-primary">
+            Salvar Avaliacoes
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table id="likert-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Titulo</th>
+                <th>Resumo</th>
+                <th>Clareza (1-5)</th>
+                <th>Completude (1-5)</th>
+                <th>Acuracia (1-5)</th>
+                <th>Utilidade (1-5)</th>
                 <th>Notas</th>
               </tr>
             </thead>

@@ -121,6 +121,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#btn-save-gold").addEventListener("click", () => saveReview("gold"));
   $("#btn-save-hall").addEventListener("click", () => saveReview("hallucination"));
   $("#btn-save-val").addEventListener("click", () => saveReview("validation"));
+  $("#btn-save-likert").addEventListener("click", () => saveReview("likert"));
+  $("#btn-generate-likert").addEventListener("click", generateLikertSample);
 
   // Corpus search
   $("#corpus-search").addEventListener("input", filterCorpusTable);
@@ -330,8 +332,8 @@ function renderCorpusTable(data) {
     tr.className = "expandable";
     tr.innerHTML = `
       <td>${escHtml(row.id)}</td>
-      <td>${escHtml(truncate(row.title, 80))}</td>
-      <td>${escHtml(truncate(row.authors, 50))}</td>
+      <td title="${escHtml(row.title)}">${escHtml(truncate(row.title, 80))}</td>
+      <td title="${escHtml(row.authors)}">${escHtml(truncate(row.authors, 50))}</td>
       <td>${escHtml(row.year)}</td>
       <td>${escHtml(row.source)}</td>
     `;
@@ -371,11 +373,16 @@ let triageData = [];
 
 async function loadResults() {
   try {
-    const [triage, extraction, summaries] = await Promise.all([
+    const [triage, extraction, summaries, corpus] = await Promise.all([
       api("GET", "/api/data/triage"),
       api("GET", "/api/data/extraction"),
       api("GET", "/api/data/summaries"),
+      api("GET", "/api/data/corpus"),
     ]);
+    // Montar lookup do corpus se ainda nao existe
+    if (!Object.keys(corpusLookup).length) {
+      corpus.forEach(r => { corpusLookup[r.id] = r; });
+    }
     triageData = triage;
     renderTriageTable(triage);
     renderExtractionTable(extraction);
@@ -399,11 +406,14 @@ function renderTriageTable(data) {
   data.forEach(row => {
     const tr = document.createElement("tr");
     const cls = row.decision === "YES" ? "decision-yes" : "decision-no";
+    const id = row.id || row.article_id || "";
+    const c = corpusLookup[id] || {};
+    const title = row.title || c.title || "";
     tr.innerHTML = `
-      <td>${escHtml(row.id)}</td>
-      <td>${escHtml(truncate(row.title, 70))}</td>
+      <td>${escHtml(id)}</td>
+      <td title="${escHtml(title)}">${escHtml(truncate(title, 70))}</td>
       <td class="${cls}">${escHtml(row.decision)}</td>
-      <td>${escHtml(truncate(row.justification, 100))}</td>
+      <td title="${escHtml(row.justification)}">${escHtml(truncate(row.justification, 100))}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -426,13 +436,15 @@ function renderExtractionTable(data) {
     const tr = document.createElement("tr");
     // Montar dados extraidos como key/value
     const fields = Object.entries(row)
-      .filter(([k]) => !["id", "title", "article_id", "tokens_used", "provider"].includes(k))
+      .filter(([k]) => !["id", "title", "article_id", "tokens_used", "provider", "latency_ms", "timestamp"].includes(k))
       .map(([k, v]) => `<strong>${escHtml(k)}:</strong> ${escHtml(truncate(String(v), 120))}`)
       .join("<br>");
     const id = row.id || row.article_id || "";
+    const c = corpusLookup[id] || {};
+    const title = row.title || c.title || "";
     tr.innerHTML = `
       <td>${escHtml(id)}</td>
-      <td>${escHtml(truncate(row.title, 60))}</td>
+      <td title="${escHtml(title)}">${escHtml(truncate(title, 60))}</td>
       <td>${fields || "—"}</td>
     `;
     tbody.appendChild(tr);
@@ -449,9 +461,11 @@ function renderSummariesTable(data) {
   data.forEach(row => {
     const tr = document.createElement("tr");
     const id = row.id || row.article_id || "";
+    const c = corpusLookup[id] || {};
+    const title = row.title || c.title || "";
     tr.innerHTML = `
       <td>${escHtml(id)}</td>
-      <td>${escHtml(truncate(row.title, 60))}</td>
+      <td title="${escHtml(title)}">${escHtml(truncate(title, 60))}</td>
       <td>${escHtml(row.summary || row.tldr || "")}</td>
     `;
     tbody.appendChild(tr);
@@ -464,20 +478,31 @@ function renderSummariesTable(data) {
 let goldData = [];
 let hallData = [];
 let valData = [];
+let likertData = [];
+
+let corpusLookup = {};  // id → {authors, year, source, abstract}
 
 async function loadReviews() {
   try {
-    const [gold, hall, val] = await Promise.all([
+    const [gold, hall, val, likert, corpus] = await Promise.all([
       api("GET", "/api/data/gold"),
       api("GET", "/api/data/hallucination"),
       api("GET", "/api/data/validation"),
+      api("GET", "/api/data/likert"),
+      api("GET", "/api/data/corpus"),
     ]);
+    // Montar lookup do corpus para enriquecer gold standard
+    corpusLookup = {};
+    corpus.forEach(r => { corpusLookup[r.id] = r; });
+
     goldData = gold;
     hallData = hall;
     valData = val;
+    likertData = likert;
     renderGoldTable(gold);
     renderHallTable(hall);
     renderValTable(val);
+    renderLikertTable(likert);
   } catch (e) {
     console.error("Erro ao carregar revisoes:", e);
   }
@@ -495,7 +520,7 @@ function renderGoldTable(data) {
   const tbody = $("#gold-table tbody");
   tbody.innerHTML = "";
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Gold standard nao gerado. Execute o step "Gold Standard" primeiro.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Gold standard nao gerado. Execute o step "Gold Standard" primeiro.</td></tr>';
     $("#gold-progress").textContent = "";
     return;
   }
@@ -504,16 +529,33 @@ function renderGoldTable(data) {
   $("#gold-progress").innerHTML = progressBar(filled, data.length, "preenchidos");
 
   data.forEach((row, i) => {
+    const c = corpusLookup[row.id] || {};
     const tr = document.createElement("tr");
     tr.dataset.index = i;
+    tr.className = "expandable";
     tr.innerHTML = `
       <td>${escHtml(row.id)}</td>
-      <td>${escHtml(truncate(row.title, 60))}</td>
+      <td title="${escHtml(row.title)}">${escHtml(truncate(row.title, 60))}</td>
+      <td title="${escHtml(c.authors)}">${escHtml(truncate(c.authors || "", 30))}</td>
+      <td>${escHtml(c.year || "")}</td>
       <td>${makeSelect(["INCLUDE", "EXCLUDE"], row.reviewer_a)}</td>
       <td>${makeSelect(["INCLUDE", "EXCLUDE"], row.reviewer_b)}</td>
       <td>${makeSelect(["INCLUDE", "EXCLUDE"], row.consensus)}</td>
       <td><textarea>${escHtml(row.justification || "")}</textarea></td>
     `;
+    // Clicar na linha expande o abstract (sem interferir com selects/textarea)
+    tr.addEventListener("click", (e) => {
+      if (e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "OPTION") return;
+      const next = tr.nextElementSibling;
+      if (next && next.classList.contains("detail-row")) {
+        next.remove();
+      } else {
+        const detail = document.createElement("tr");
+        detail.className = "detail-row";
+        detail.innerHTML = `<td colspan="8"><strong>Abstract:</strong> ${escHtml(c.abstract || "N/A")}</td>`;
+        tr.after(detail);
+      }
+    });
     tbody.appendChild(tr);
   });
 }
@@ -535,8 +577,8 @@ function renderHallTable(data) {
     tr.dataset.index = i;
     tr.innerHTML = `
       <td>${escHtml(row.module)}</td>
-      <td>${escHtml(truncate(row.claim, 80))}</td>
-      <td>${escHtml(truncate(row.source_text, 80))}</td>
+      <td title="${escHtml(row.claim)}">${escHtml(truncate(row.claim, 80))}</td>
+      <td title="${escHtml(row.source_text)}">${escHtml(truncate(row.source_text, 80))}</td>
       <td>${makeSelect(["GROUNDED", "INFERRED", "HALLUCINATED"], row.classification)}</td>
     `;
     tbody.appendChild(tr);
@@ -561,7 +603,7 @@ function renderValTable(data) {
     tr.innerHTML = `
       <td>${escHtml(row.article_id)}</td>
       <td>${escHtml(row.field)}</td>
-      <td>${escHtml(truncate(row.extracted_value, 80))}</td>
+      <td title="${escHtml(row.extracted_value)}">${escHtml(truncate(row.extracted_value, 80))}</td>
       <td>${makeSelect(["CORRECT", "HALLUCINATION", "OMISSION", "IMPRECISION"], row.error_type)}</td>
       <td><textarea>${escHtml(row.notes || "")}</textarea></td>
     `;
@@ -594,6 +636,9 @@ async function saveReview(type) {
     } else if (type === "validation") {
       endpoint = "/api/data/validation";
       rows = collectValRows();
+    } else if (type === "likert") {
+      endpoint = "/api/data/likert";
+      rows = collectLikertRows();
     }
 
     await api("POST", endpoint, rows);
@@ -603,6 +648,7 @@ async function saveReview(type) {
     if (type === "gold") { goldData = rows; renderGoldTable(rows); }
     if (type === "hallucination") { hallData = rows; renderHallTable(rows); }
     if (type === "validation") { valData = rows; renderValTable(rows); }
+    if (type === "likert") { likertData = rows; renderLikertTable(rows); }
   } catch (e) {
     showToast("Erro ao salvar: " + e.message);
   }
@@ -610,7 +656,8 @@ async function saveReview(type) {
 
 function collectGoldRows() {
   const tbody = $("#gold-table tbody");
-  return Array.from(tbody.querySelectorAll("tr:not(.empty-state tr)")).map((tr, i) => {
+  return Array.from(tbody.querySelectorAll("tr[data-index]")).map((tr) => {
+    const i = parseInt(tr.dataset.index);
     const selects = tr.querySelectorAll("select");
     const textarea = tr.querySelector("textarea");
     return {
@@ -649,6 +696,82 @@ function collectValRows() {
 }
 
 // ---------------------------------------------------------------------------
+// Likert: render, collect, generate
+// ---------------------------------------------------------------------------
+function makeLikertSelect(current) {
+  const opts = ["1", "2", "3", "4", "5"].map(v => {
+    const sel = String(current) === v ? "selected" : "";
+    return `<option value="${v}" ${sel}>${v}</option>`;
+  });
+  return `<select><option value="">—</option>${opts.join("")}</select>`;
+}
+
+function renderLikertTable(data) {
+  const tbody = $("#likert-table tbody");
+  tbody.innerHTML = "";
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma amostra gerada. Clique em "Gerar Amostra" para iniciar.</td></tr>';
+    $("#likert-progress").textContent = "";
+    return;
+  }
+
+  const filled = data.filter(r =>
+    r.clareza && r.completude && r.acuracia && r.utilidade &&
+    String(r.clareza).trim() !== "" && String(r.completude).trim() !== "" &&
+    String(r.acuracia).trim() !== "" && String(r.utilidade).trim() !== ""
+  ).length;
+  $("#likert-progress").innerHTML = progressBar(filled, data.length, "avaliados");
+
+  data.forEach((row, i) => {
+    const tr = document.createElement("tr");
+    tr.dataset.index = i;
+    tr.innerHTML = `
+      <td>${escHtml(row.article_id)}</td>
+      <td title="${escHtml(row.title)}">${escHtml(truncate(row.title, 60))}</td>
+      <td title="${escHtml(row.summary)}">${escHtml(truncate(row.summary, 100))}</td>
+      <td>${makeLikertSelect(row.clareza)}</td>
+      <td>${makeLikertSelect(row.completude)}</td>
+      <td>${makeLikertSelect(row.acuracia)}</td>
+      <td>${makeLikertSelect(row.utilidade)}</td>
+      <td><textarea>${escHtml(row.notas || "")}</textarea></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function collectLikertRows() {
+  const tbody = $("#likert-table tbody");
+  return Array.from(tbody.querySelectorAll("tr[data-index]")).map((tr) => {
+    const i = parseInt(tr.dataset.index);
+    const selects = tr.querySelectorAll("select");
+    const textarea = tr.querySelector("textarea");
+    return {
+      article_id: likertData[i].article_id,
+      title: likertData[i].title,
+      summary: likertData[i].summary,
+      clareza: selects[0]?.value || "",
+      completude: selects[1]?.value || "",
+      acuracia: selects[2]?.value || "",
+      utilidade: selects[3]?.value || "",
+      notas: textarea?.value || "",
+    };
+  });
+}
+
+async function generateLikertSample() {
+  if (likertData.length && !confirm("Ja existe uma amostra. Gerar uma nova ira substituir. Continuar?")) return;
+  try {
+    showToast("Gerando amostra Likert...");
+    const res = await api("POST", "/api/generate-likert-sample");
+    showToast(`Amostra gerada: ${res.count} resumos.`);
+    likertData = await api("GET", "/api/data/likert");
+    renderLikertTable(likertData);
+  } catch (e) {
+    showToast("Erro: " + e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Aba: Metricas
 // ---------------------------------------------------------------------------
 async function loadMetrics() {
@@ -675,20 +798,16 @@ function renderMetricsCards(data) {
   }
 
   const items = [
-    { key: "recall", label: "Recall", target: 0.85 },
-    { key: "precision", label: "Precision", target: null },
-    { key: "f1", label: "F1-Score", target: null },
-    { key: "workload_reduction", label: "Workload Reduction", target: null },
-    { key: "kappa", label: "Cohen's Kappa", target: 0.7 },
+    { key: "recall", label: "Recall", target: 0.85, fmt: "decimal" },
+    { key: "precision", label: "Precision", target: null, fmt: "decimal" },
+    { key: "f1_score", label: "F1-Score", target: null, fmt: "decimal" },
+    { key: "workload_reduction_pct", label: "Workload Reduction", target: null, fmt: "pct" },
+    { key: "kappa_gold_standard", label: "Cohen's Kappa", target: 0.7, fmt: "decimal" },
   ];
 
   items.forEach(item => {
-    let val = data[item.key];
-    if (val === undefined) {
-      // Tentar variantes de nomes
-      val = data[item.key.replace("_", " ")] || data[item.key.toUpperCase()];
-    }
-    if (val === undefined) return;
+    const val = data[item.key];
+    if (val === undefined || val === null) return;
 
     const card = document.createElement("div");
     const numVal = parseFloat(val);
@@ -699,7 +818,7 @@ function renderMetricsCards(data) {
     card.className = cls;
 
     const display = isNaN(numVal) ? val :
-      (item.key === "workload_reduction" ? (numVal * 100).toFixed(1) + "%" : numVal.toFixed(3));
+      (item.fmt === "pct" ? numVal.toFixed(1) + "%" : numVal.toFixed(3));
 
     card.innerHTML = `
       <div class="metric-value">${display}</div>
@@ -713,7 +832,7 @@ function renderMetricsFigures() {
   const container = $("#metrics-figures");
   container.innerHTML = "";
 
-  const figures = ["confusion_matrix.png", "metrics_bar.png"];
+  const figures = ["confusion_matrix.png", "metrics_comparison.png"];
   figures.forEach(f => {
     const img = document.createElement("img");
     img.src = `/api/figures/${f}`;
@@ -732,28 +851,44 @@ function renderCrossval(data) {
     return;
   }
 
-  // Exibir kappa medio se disponivel
-  if (data.mean_kappa !== undefined) {
-    const p = document.createElement("p");
-    p.innerHTML = `<strong>Kappa medio:</strong> ${parseFloat(data.mean_kappa).toFixed(3)}`;
+  // Kappa medio
+  if (data.kappa_mean !== undefined) {
+    const cls = parseFloat(data.kappa_mean) >= (data.expected_kappa || 0.8) ? "metric-ok" : "metric-warn";
+    const p = document.createElement("div");
+    p.className = `metric-card ${cls}`;
+    p.style.display = "inline-block";
+    p.innerHTML = `
+      <div class="metric-value">${parseFloat(data.kappa_mean).toFixed(3)}</div>
+      <div class="metric-label">Kappa Medio</div>
+    `;
     container.appendChild(p);
   }
 
-  // Tabela de runs se houver
-  if (data.runs && Array.isArray(data.runs)) {
+  // Tabela de pares
+  const pairs = [
+    { label: "Run 1 vs Run 2", key: "kappa_run1_run2" },
+    { label: "Run 1 vs Run 3", key: "kappa_run1_run3" },
+    { label: "Run 2 vs Run 3", key: "kappa_run2_run3" },
+  ];
+  const hasPairs = pairs.some(p => data[p.key] !== undefined);
+
+  if (hasPairs) {
     const table = document.createElement("table");
     table.innerHTML = `
       <thead>
-        <tr><th>Run</th><th>Kappa</th><th>Agreement</th></tr>
+        <tr><th>Par de Runs</th><th>Kappa</th></tr>
       </thead>
       <tbody>
-        ${data.runs.map((r, i) => `
+        ${pairs.map(p => `
           <tr>
-            <td>${i + 1}</td>
-            <td>${parseFloat(r.kappa || 0).toFixed(3)}</td>
-            <td>${parseFloat(r.agreement || 0).toFixed(3)}</td>
+            <td>${p.label}</td>
+            <td>${data[p.key] !== undefined ? parseFloat(data[p.key]).toFixed(4) : "—"}</td>
           </tr>
         `).join("")}
+        <tr>
+          <td><strong>Concordancia total</strong></td>
+          <td><strong>${data.agreement_pct !== undefined ? parseFloat(data.agreement_pct).toFixed(1) + "%" : "—"}</strong></td>
+        </tr>
       </tbody>
     `;
     container.appendChild(table);

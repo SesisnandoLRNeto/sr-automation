@@ -1,9 +1,13 @@
 """Backend FastAPI para a interface web do SR-Automation."""
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import json
 import logging
 import os
+import random
 import shutil
 import tempfile
 import threading
@@ -47,6 +51,7 @@ from src.utils import load_config, setup_logging
 # Estado global
 # ---------------------------------------------------------------------------
 _current_step: str | None = None
+_current_thread: threading.Thread | None = None
 _log_buffer: deque = deque(maxlen=500)
 _log_index: int = 0  # Contador global para SSE
 _lock = threading.Lock()
@@ -130,8 +135,19 @@ STEP_DEPS = {
 }
 
 
+def _cleanup_stuck_step():
+    """Limpa _current_step se a thread morreu (erro/crash)."""
+    global _current_step, _current_thread
+    with _lock:
+        if _current_step and _current_thread and not _current_thread.is_alive():
+            logger.warning(f"Step '{_current_step}' travado (thread morta). Limpando.")
+            _current_step = None
+            _current_thread = None
+
+
 def _get_step_status(step: str) -> str:
     global _current_step
+    _cleanup_stuck_step()
     if _current_step == step:
         return "running"
     f = STEP_FILES.get(step)
@@ -269,22 +285,31 @@ def _run_step_in_thread(step: str):
     finally:
         with _lock:
             _current_step = None
+            _current_thread = None
 
 
 @app.post("/api/run/{step}")
 async def api_run_step(step: str):
-    global _current_step
+    global _current_step, _current_thread
 
     if step not in STEP_FILES:
         raise HTTPException(400, f"Step desconhecido: {step}")
 
     with _lock:
+        # Limpar step travado (thread morta)
+        if _current_step and _current_thread and not _current_thread.is_alive():
+            _current_step = None
+            _current_thread = None
+
         if _current_step is not None:
             raise HTTPException(409, f"Step '{_current_step}' ja esta rodando.")
         _current_step = step
 
     t = threading.Thread(target=_run_step_in_thread, args=(step,), daemon=True)
     t.start()
+
+    with _lock:
+        _current_thread = t
 
     return {"ok": True, "step": step}
 
@@ -305,6 +330,7 @@ async def api_reset():
         "outputs/summaries.jsonl",
         "outputs/hallucination_sample.csv",
         "outputs/extraction_validation.csv",
+        "outputs/likert_evaluation.csv",
         "outputs/audit_log.jsonl",
         "outputs/metrics.json",
         "outputs/cross_validation.json",
@@ -435,6 +461,82 @@ async def api_save_validation(rows: list[dict]):
     return {"ok": True, "count": len(df)}
 
 
+@app.get("/api/data/likert")
+async def api_data_likert():
+    return _read_csv_as_dicts(_path("outputs/likert_evaluation.csv"))
+
+
+@app.post("/api/data/likert")
+async def api_save_likert(rows: list[dict]):
+    df = pd.DataFrame(rows)
+    df.to_csv(_path("outputs/likert_evaluation.csv"), index=False, encoding="utf-8")
+    logger.info(f"Likert evaluation salvo: {len(df)} linhas.")
+    return {"ok": True, "count": len(df)}
+
+
+@app.post("/api/generate-likert-sample")
+async def api_generate_likert_sample():
+    summaries_path = _path("outputs/summaries.jsonl")
+    triage_path = _path("outputs/triage_results.jsonl")
+
+    if not summaries_path.exists():
+        raise HTTPException(404, "Arquivo summaries.jsonl nao encontrado. Execute o step Resumos primeiro.")
+    if not triage_path.exists():
+        raise HTTPException(404, "Arquivo triage_results.jsonl nao encontrado. Execute o step Triagem primeiro.")
+
+    summaries = _read_jsonl(summaries_path)
+    triage = _read_jsonl(triage_path)
+
+    # Lookup de resumos por article_id
+    summary_lookup = {}
+    for s in summaries:
+        sid = s.get("id") or s.get("article_id", "")
+        # Tentar campo summary/tldr, senao montar a partir de problem/solution/findings ou raw_response
+        text = s.get("summary") or s.get("tldr", "")
+        if not text:
+            parts = []
+            for field in ("problem", "solution", "findings"):
+                if s.get(field):
+                    parts.append(s[field])
+            text = " ".join(parts) if parts else s.get("raw_response", "")
+        summary_lookup[sid] = text
+
+    # Selecionar artigos que possuem resumo (apenas YES terao resumo)
+    articles_with_summary = [r for r in triage if (r.get("id") or r.get("article_id", "")) in summary_lookup]
+
+    # Selecionar ate 20 artigos aleatoriamente
+    sample = random.sample(articles_with_summary, min(20, len(articles_with_summary)))
+
+    # Carregar corpus para titulos
+    corpus_path = _path("data/raw/corpus.csv")
+    corpus_lookup = {}
+    if corpus_path.exists():
+        corpus_df = pd.read_csv(corpus_path)
+        for _, row in corpus_df.iterrows():
+            corpus_lookup[row.get("id", "")] = row.get("title", "")
+
+    rows = []
+    for art in sample:
+        aid = art.get("id") or art.get("article_id", "")
+        title = art.get("title") or corpus_lookup.get(aid, "")
+        summary = summary_lookup.get(aid, "")
+        rows.append({
+            "article_id": aid,
+            "title": title,
+            "summary": summary,
+            "clareza": "",
+            "completude": "",
+            "acuracia": "",
+            "utilidade": "",
+            "notas": "",
+        })
+
+    df = pd.DataFrame(rows)
+    df.to_csv(_path("outputs/likert_evaluation.csv"), index=False, encoding="utf-8")
+    logger.info(f"Likert sample gerado: {len(df)} resumos.")
+    return {"ok": True, "count": len(df)}
+
+
 # ---------------------------------------------------------------------------
 # Exportar resultados (zip com timestamp)
 # ---------------------------------------------------------------------------
@@ -453,6 +555,7 @@ async def api_export():
         "outputs/summaries.jsonl",
         "outputs/hallucination_sample.csv",
         "outputs/extraction_validation.csv",
+        "outputs/likert_evaluation.csv",
         "outputs/audit_log.jsonl",
         "outputs/metrics.json",
         "outputs/cross_validation.json",
