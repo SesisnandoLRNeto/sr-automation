@@ -1,67 +1,66 @@
-model:
-  provider: "groq"
-  model_name: "llama-3.3-70b-versatile"
-  fallback_provider: "together"
-  fallback_model: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
-
-inference:
-  triage:
-    temperature: 0.1
-    top_p: 0.9
-    max_tokens: 100
-  extraction:
-    temperature: 0.0
-    top_p: 1.0
-    max_tokens: 1024
-  summarization:
-    temperature: 0.3
-    top_p: 0.95
-    max_tokens: 512
-    repetition_penalty: 1.1
-
-embeddings:
-  model: "all-MiniLM-L6-v2"
-  device: "cpu"
-
-vector_store:
-  backend: "chromadb"
-  collection_name: "sr_corpus"
-  persist_directory: "data/processed/embeddings"
-
-reranking:
-  model: "cross-encoder/ms-marco-MiniLM-L-12-v2"
-  top_k: 20
-
 corpus:
-  query: '"intelligent tutoring system" AND ("large language model" OR "LLM" OR "GPT" OR "transformer")'
-  year_range: [2022, 2024]
-  language: "en"
-  target_size: [80, 120]
   dedup_threshold: 0.9
-  sources: ["semantic_scholar", "openalex", "arxiv", "eric"]
-
-gold_standard:
-  min_kappa: 0.7
-  criteria:
-    - "Presents an intelligent tutoring system or educational tool"
-    - "Uses an LLM as a central component"
-    - "Reports empirical evaluation or proof of concept"
-
+  language: en
+  query: '"intelligent tutoring system" AND ("large language model" OR "LLM" OR "GPT"
+    OR "transformer")'
+  sources:
+  - semantic_scholar
+  - openalex
+  - arxiv
+  - eric
+  target_size:
+  - 80
+  - 120
+  year_range:
+  - 2022
+  - 2024
 cross_validation:
-  num_runs: 3
   expected_kappa: 0.8
   force_together: true
-
+  num_runs: 3
+embeddings:
+  device: cpu
+  model: all-MiniLM-L6-v2
+evaluation:
+  manual_baseline_minutes_per_article: 5
+  recall_aspiration: 0.9
+  recall_target: 0.85
+gold_standard:
+  criteria:
+  - Presents an intelligent tutoring system or educational tool
+  - Uses an LLM as a central component
+  - Reports empirical evaluation or proof of concept
+  min_kappa: 0.7
 hallucination_check:
   sample_size_per_module: 30
-
-evaluation:
-  recall_target: 0.85
-  recall_aspiration: 0.90
-  manual_baseline_minutes_per_article: 5
-
+inference:
+  extraction:
+    max_tokens: 1024
+    temperature: 0.0
+    top_p: 1.0
+  summarization:
+    max_tokens: 512
+    repetition_penalty: 1.1
+    temperature: 0.3
+    top_p: 0.95
+  triage:
+    max_tokens: 100
+    temperature: 0.1
+    top_p: 0.9
+model:
+  fallback_model: meta-llama/Llama-3.3-70B-Instruct-Turbo
+  fallback_provider: together
+  model_name: llama-3.3-70b-versatile
+  provider: groq
 paths:
-  corpus: "data/raw/corpus.csv"
-  gold_standard: "data/gold_standard.csv"
-  outputs: "outputs/"
-  prompts: "prompts/"
+  corpus: data/raw/corpus.csv
+  gold_standard: data/gold_standard.csv
+  outputs: outputs/
+  prompts: prompts/
+reranking:
+  model: cross-encoder/ms-marco-MiniLM-L-12-v2
+  top_k: 20
+vector_store:
+  backend: chromadb
+  collection_name: sr_corpus
+  persist_directory: data/processed/embeddings
