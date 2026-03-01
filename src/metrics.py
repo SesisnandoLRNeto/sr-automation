@@ -117,7 +117,7 @@ def calculate_metrics(
         "specificity": round(specificity, 4),
         "f1_score": round(f1, 4),
         "workload_reduction_pct": round(wr, 2),
-        "recall_target_met": recall >= recall_target,
+        "recall_target_met": bool(recall >= recall_target),
         "total_articles": total,
         "included_by_system": int((y_pred == 1).sum()),
         "included_in_gold": int((y_true == 1).sum()),
