@@ -1,5 +1,8 @@
 """Orquestrador CLI do pipeline de revisão sistemática."""
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import argparse
 import logging
 import os
