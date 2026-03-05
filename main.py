@@ -107,9 +107,9 @@ def step_gold(config: dict) -> None:
     corpus_df = pd.read_csv(corpus_path)
     with open(gold_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["id", "title", "reviewer_a", "reviewer_b", "consensus", "justification"])
+        writer.writerow(["id", "title", "abstract", "reviewer_a", "reviewer_b", "consensus", "justification"])
         for _, row in corpus_df.iterrows():
-            writer.writerow([row["id"], row["title"], "", "", "", ""])
+            writer.writerow([row["id"], row["title"], row.get("abstract", ""), "", "", "", ""])
     logger.info(f"Gold standard gerado: {gold_path} ({len(corpus_df)} artigos)")
     logger.info("Preencha as colunas reviewer_a, reviewer_b, consensus e justification.")
 
